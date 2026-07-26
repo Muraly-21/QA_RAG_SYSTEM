@@ -8,6 +8,8 @@ langchain-huggingface
 langchain-chroma
 langchain-groq
 unstructured
+unstructured[pdf]
+pdfminer.six
 pdf2image
 pytesseract
 pypdf
