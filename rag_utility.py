@@ -1,7 +1,7 @@
 import os
 import ssl
-import shutil
 import warnings
+import chromadb
 
 # 1. Force HTTP libraries to use standard 'certifi' certificates
 try:
@@ -35,7 +35,7 @@ load_dotenv()
 working_dir = os.path.dirname(os.path.abspath(__file__))
 db_directory = os.path.join(working_dir, "doc_vectorstore")
 
-# Load lightweight embedding model to stay well within Streamlit Cloud 1 GB RAM limit
+# Load embedding model
 embedder = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
 # Initialize LLM via Groq
@@ -51,56 +51,49 @@ def process_document_to_chroma_db(file_names):
     for file_name in file_names:
         file_path = os.path.join(working_dir, file_name)
         
-        # Parse PDF using UnstructuredPDFLoader
         loader = UnstructuredPDFLoader(
             file_path=file_path,
             strategy="hi_res"
         )
-        
         documents = loader.load()
 
-        # Split document into chunks
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=2000,
             chunk_overlap=400
         )
-
         chunks = text_splitter.split_documents(documents)
         all_chunks.extend(chunks)
 
-    # Initialize Chroma client and clear old collection cleanly without deleting SQLite system files
-    vectordb = Chroma(
-        persist_directory=db_directory,
-        embedding_function=embedder
-    )
-    
-    try:
-        vectordb.delete_collection()
-    except Exception:
-        pass  # Safe fallback if collection doesn't exist yet
+    # Initialize Chroma persistent client explicitly
+    client = chromadb.PersistentClient(path=db_directory)
 
-    # Store new document chunks in Chroma DB
+    # Clean existing default collection safely
+    try:
+        client.delete_collection("langchain")
+    except Exception:
+        pass
+
+    # Build collection passing the client object directly
     vectordb = Chroma.from_documents(
         documents=all_chunks,
         embedding=embedder,
-        persist_directory=db_directory
+        client=client
     )
     return vectordb
 
 
 def answer_question_with_history(user_question, chat_history):
-    # Load existing Chroma database
+    # Pass existing client directly
+    client = chromadb.PersistentClient(path=db_directory)
     vectordb = Chroma(
-        persist_directory=db_directory,
+        client=client,
         embedding_function=embedder
     )
 
-    # Setup retriever
     retriever = vectordb.as_retriever(
         search_kwargs={"k": 3}
     )
 
-    # History-aware contextualization prompt
     contextualize_q_system_prompt = (
         "Given a chat history and the latest user question "
         "which might reference context in the chat history, "
@@ -121,7 +114,6 @@ def answer_question_with_history(user_question, chat_history):
         contextualize_q_prompt
     )
 
-    # QA prompt template
     system_prompt = (
         "You are an assistant for question-answering tasks. "
         "Use the following pieces of retrieved context to answer "
@@ -138,7 +130,6 @@ def answer_question_with_history(user_question, chat_history):
     
     qa_chain = create_stuff_documents_chain(llm, qa_prompt)
 
-    # Combine into full RAG pipeline
     rag_chain = create_retrieval_chain(history_aware_retriever, qa_chain)
 
     response = rag_chain.invoke({
