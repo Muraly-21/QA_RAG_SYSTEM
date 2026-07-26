@@ -46,15 +46,12 @@ llm = ChatGroq(
 
 
 def process_document_to_chroma_db(file_names):
-    # Safely clear old vectorstore folder if it exists on disk
-    if os.path.exists(db_directory):
-        shutil.rmtree(db_directory, ignore_errors=True)
-
     all_chunks = []
+    
     for file_name in file_names:
         file_path = os.path.join(working_dir, file_name)
         
-        # strategy="hi_res" uses Tesseract OCR for scanned PDF pages
+        # Parse PDF using UnstructuredPDFLoader
         loader = UnstructuredPDFLoader(
             file_path=file_path,
             strategy="hi_res"
@@ -71,7 +68,18 @@ def process_document_to_chroma_db(file_names):
         chunks = text_splitter.split_documents(documents)
         all_chunks.extend(chunks)
 
-    # Store chunks in persistent Chroma vector database
+    # Initialize Chroma client and clear old collection cleanly without deleting SQLite system files
+    vectordb = Chroma(
+        persist_directory=db_directory,
+        embedding_function=embedder
+    )
+    
+    try:
+        vectordb.delete_collection()
+    except Exception:
+        pass  # Safe fallback if collection doesn't exist yet
+
+    # Store new document chunks in Chroma DB
     vectordb = Chroma.from_documents(
         documents=all_chunks,
         embedding=embedder,
