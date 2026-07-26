@@ -21,7 +21,12 @@ if "display_history" not in st.session_state:
     st.session_state.display_history = []
 
 # File uploader widget
-uploaded_files = st.file_uploader("Upload PDF Files", type=["pdf"], accept_multiple_files=True)
+uploaded_files = st.file_uploader(
+    "Upload PDF Files", 
+    type=["pdf"], 
+    accept_multiple_files=True,
+    max_upload_size = 15
+)
 
 if uploaded_files:
     current_files_signature = [file.name for file in uploaded_files]
