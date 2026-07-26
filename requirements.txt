@@ -1,0 +1,16 @@
+streamlit
+langchain
+langchain-community
+langchain-core
+langchain-classic
+langchain-text-splitters
+langchain-huggingface
+langchain-chroma
+langchain-groq
+unstructured
+pdf2image
+pytesseract
+pypdf
+sentence-transformers
+python-dotenv
+nltk

@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+.vscode/
+.env
+doc_vectorstore/
+*.pdf
